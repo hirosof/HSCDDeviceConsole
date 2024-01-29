@@ -74,13 +74,45 @@ BOOL CHSCDDevice::ParseRawTOCInfo ( CDROM_TOC_FULL_TOC_DATA * pFullToc , THSCD_D
 	SessionInnerData *psid = new SessionInnerData [ SessionNums ];
 	SessionInnerData *pInner;
 
+	memset( psid, 0, sizeof( SessionInnerData ) * SessionNums );
+
 	UCHAR SessionNumberTable[VHSCD_MAX_TRACK];
 
 	CDROM_TOC_FULL_TOC_DATA_BLOCK *pBlock;
 	THSCD_TrackInfo *pTrack;
+
+#ifdef _DEBUG
+
+	std::string sep( 64, '=' );
+
+	printf( "%s\n", sep.c_str( ) );
+	printf( "CHSCDDevice::ParseRawTOCInfo  DebugLogs\n" );
+	printf( "%s\n", sep.c_str( ) );
+
+#endif // _DEBUG
+
+
 	for ( size_t i = 0; i < InnerStructElements; i++ ) {
 		pBlock = &pFullToc->Descriptors [ i ];
 		pInner = psid + (pBlock->SessionNumber - 1);
+
+#ifdef _DEBUG
+
+		printf( "CDROM_TOC_FULL_TOC_DATA_BLOCK [%zu]\n", i );
+
+		printf( "\tSessionNumber : %u\n", pBlock->SessionNumber );
+		printf( "\tControl : 0x%02X (%d)\n", pBlock->Control, pBlock->Control );
+		printf( "\tAdr : 0x%02X (%d)\n", pBlock->Adr, pBlock->Adr );
+		printf( "\tPoint : 0x%02X (%d)\n", pBlock->Point, pBlock->Point );
+		printf( "\tMsfExtra : %02d:%02d:%02d\n", pBlock->MsfExtra[0], pBlock->MsfExtra[1], pBlock->MsfExtra[2] );
+		printf( "\tMsf : %02d:%02d:%02d\n", pBlock->Msf[0], pBlock->Msf[1], pBlock->Msf[2] );
+
+
+		printf( "\n" );
+		
+#endif // _DEBUG
+
+
 		switch ( pBlock->Point ) {
 			case 0xA0:
 				//現在のセッション上での開始トラック番号の通知
@@ -105,9 +137,7 @@ BOOL CHSCDDevice::ParseRawTOCInfo ( CDROM_TOC_FULL_TOC_DATA * pFullToc , THSCD_D
 						//トラック1～99に関する情報
 						pTrack = &pInfo->TrackInfo [ pBlock->Point - 1 ];
 						pTrack->MSFPosition.Start = this->MSFToSectors ( pBlock->Msf [ 0 ] , pBlock->Msf [ 1 ] , pBlock->Msf [ 2 ] );
-#ifdef _DEBUG
-						//printf ("%u : %u\n", pBlock->Point, pTrack->MSFPosition.Start);
-#endif
+
 						SessionNumberTable [ pBlock->Point - 1 ] = pBlock->SessionNumber;
 						switch ( pBlock->Control ) {
 							case  0:
@@ -166,6 +196,12 @@ BOOL CHSCDDevice::ParseRawTOCInfo ( CDROM_TOC_FULL_TOC_DATA * pFullToc , THSCD_D
 	this->JugdeDiscType ( pInfo );
 
 	delete [ ]psid;
+
+#ifdef _DEBUG
+	printf( "%s\n", std::string(64,'-').c_str() );
+	printf( "\n" );
+#endif // _DEBUG
+
 	return TRUE;
 }
 
@@ -437,7 +473,20 @@ BOOL CHSCDDevice::GetDiscInfo ( THSCD_DiscInfo * pInfo )
 	if ( pInfo == nullptr ) return FALSE;
 	if ( hDevice == NULL ) return FALSE;
 
-	CDROM_READ_TOC_EX tocex = { 0 };
+
+#ifdef _DEBUG
+
+	std::string sep( 64, '=' );
+
+	printf( "%s\n", sep.c_str( ) );
+	printf( "CHSCDDevice::GetDiscInfo  DebugLogs\n" );
+	printf( "%s\n", sep.c_str( ) );
+
+#endif // _DEBUG
+
+	CDROM_READ_TOC_EX tocex;
+	memset( &tocex, 0, sizeof( CDROM_READ_TOC_EX ) );
+
 	tocex.Format = CDROM_READ_TOC_EX_FORMAT_FULL_TOC;
 	tocex.Msf = 1;
 
@@ -451,21 +500,60 @@ BOOL CHSCDDevice::GetDiscInfo ( THSCD_DiscInfo * pInfo )
 	if ( bRet ) {
 
 		UINT32 FullStructSize = ( ( full_toc.Length [ 0 ] << 8 ) | ( full_toc.Length [ 1 ] ) ) + sizeof ( UCHAR ) * 2;
-		if ( ( FullStructSize % 2 ) == 1 ) FullStructSize++;
 
-		char *lpData = new char [ FullStructSize ];
+		if(( FullStructSize % 4 )!=0)	FullStructSize = FullStructSize + ( 4 - FullStructSize % 4 );
+
+		tocex.SessionTrack = 0;
+
+#ifdef _DEBUG
+
+		printf( "<<1 try>>\n" );
+		printf( "FullStructSize = %u\n", FullStructSize );
+		printf( "returnSize = %u\n", returnSize );
+		printf( "FirstCall Length = %u\n", ( ( full_toc.Length[0] << 8 ) | ( full_toc.Length[1] ) ) );
+		printf( "\n" );
+
+#endif
+
+		unsigned char *lpData = new unsigned char [ FullStructSize];
+		memset( lpData, 0, FullStructSize );
+
 		BOOL ReturnValue = FALSE;
 
 		bRet = DeviceIoControl ( this->hDevice , IOCTL_CDROM_READ_TOC_EX , &tocex , sizeof ( CDROM_READ_TOC_EX ) ,
 			lpData , FullStructSize , &returnSize , nullptr );
 
-		if ( bRet ) ReturnValue = this->ParseRawTOCInfo ( reinterpret_cast< CDROM_TOC_FULL_TOC_DATA* >( lpData ) , pInfo );
 
+
+		if ( bRet ) {
+
+#ifdef _DEBUG
+			printf( "<<2 try>>\n" );
+
+			printf( "FullStructSize = %u\n", FullStructSize );
+			printf( "returnSize = %u\n", returnSize );
+			
+			printf( "FirstCall Length = %u\n", ( ( lpData[0] << 8 ) | ( lpData[1] ) ) );
+			printf( "\n" );
+
+#endif
+
+			ReturnValue = this->ParseRawTOCInfo( reinterpret_cast<CDROM_TOC_FULL_TOC_DATA*>( lpData ), pInfo );
+		}
 		delete []lpData;
+
+#ifdef _DEBUG
+		printf( "%s\n", std::string( 64, '-' ).c_str( ) );
+		printf( "\n" );
+#endif // _DEBUG
 
 		return ReturnValue;
 
 	}
+#ifdef _DEBUG
+	printf( "%s\n", std::string( 64, '-' ).c_str( ) );
+	printf( "\n" );
+#endif // _DEBUG
 	return 0;
 }
 

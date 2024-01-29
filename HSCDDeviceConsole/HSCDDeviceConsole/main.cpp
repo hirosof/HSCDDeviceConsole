@@ -246,7 +246,7 @@ void ShowCDText( HANDLE hDevice ) {
 			std::string str;
 			uint32_t OldPosition = 0;
 			uint32_t TrackID = 100;
-			bool bQuitFlag;
+			//bool bQuitFlag;
 			for ( UINT32 i = 0; i < InnerStructElements; i++ ) {
 				CDROM_TOC_CD_TEXT_DATA_BLOCK* pBlock = &pTocData->Descriptors[i];
 
@@ -269,7 +269,7 @@ void  RippingTest ( CHSCDDevice *pcdd ) {
 	if ( pcdd->GetDiscInfo ( &di ) ) {
 
 #ifdef _DEBUG
-		ShowCDText( pcdd->GetHandle( ) );
+		//ShowCDText( pcdd->GetHandle( ) );
 #endif
 
 		ShowDiscInfo ( di );
@@ -388,6 +388,7 @@ void  RippingTest ( CHSCDDevice *pcdd ) {
 			SYSTEMTIME st, st2;
 			GetLocalTime( &st );
 
+			SetRealSpeed( pcdd->GetHandle( ), 0xFFFF );
 			SetRealSpeedEx( pcdd->GetHandle(), di.TrackInfo[Track - 1].StartSectorPosition, di.TrackInfo[Track - 1].EndSectorPosition, 0xFFFF );
 
 			printf( "スピンアップ中・・・" );
@@ -442,9 +443,9 @@ void SetSpeed ( HANDLE hDevice , int speed ) {
 
 	SpeedInfo.RequestType = CDROM_SPEED_REQUEST::CdromSetSpeed;
 
-	SpeedInfo.ReadSpeed = speed*150;
+	SpeedInfo.ReadSpeed = speed;
 
-	SpeedInfo.WriteSpeed = speed * 150;
+	SpeedInfo.WriteSpeed = speed;
 
 	SpeedInfo.RotationControl = CdromDefaultRotation;
 
@@ -503,7 +504,7 @@ void SetRealSpeedEx ( HANDLE hDevice , uint32_t StartLBA , uint32_t EndLBA , uin
 
 	SpeedInfo.RestoreDefaults = FALSE;
 	SpeedInfo.SetExact = FALSE;
-	SpeedInfo.RandomAccess = FALSE;
+	SpeedInfo.RandomAccess = TRUE;
 	SpeedInfo.Persistent = TRUE;
 	DWORD retSize;
 	BOOL bRet = DeviceIoControl ( hDevice , IOCTL_CDROM_SET_SPEED , &SpeedInfo , sizeof ( CDROM_SET_STREAMING ) , 0 , 0 , &retSize , 0 );
